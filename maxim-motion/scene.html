@@ -1,0 +1,712 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Maxim Promo</title>
+<style>
+  html, body { margin: 0; background: #111; }
+  canvas { display: block; width: 100vw; height: auto; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+const W = 1920, H = 1080, DUR = 15;
+const Y = '#FFD21F', Y2 = '#FFE066', K = '#111111', WH = '#FFFFFF', CREAM = '#F5F1E6';
+const FAM = '"Inter Display", "Inter", sans-serif';
+
+const out = document.getElementById('c');
+const octx = out.getContext('2d');
+const buf = document.createElement('canvas');
+buf.width = W; buf.height = H;
+const x = buf.getContext('2d');
+
+// ---------- easing ----------
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const p = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, v) => a + (b - a) * v;
+const eOC = v => 1 - Math.pow(1 - v, 3);
+const eIOC = v => v < .5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2;
+const eOE = v => v >= 1 ? 1 : 1 - Math.pow(2, -10 * v);
+const eIE = v => v <= 0 ? 0 : Math.pow(2, 10 * v - 10);
+const eIC = v => v * v * v;
+const eOB = v => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(v - 1, 3) + c1 * Math.pow(v - 1, 2); };
+const spring = v => v <= 0 ? 0 : 1 - Math.exp(-7 * v) * Math.cos(13 * v);
+const font = (w, s) => `${w} ${s}px ${FAM}`;
+
+function rr(px, py, w, h, r) { x.beginPath(); x.roundRect(px, py, w, h, r); }
+function circle(cx, cy, r) { x.beginPath(); x.arc(cx, cy, Math.max(0, r), 0, Math.PI * 2); }
+
+// Letter-by-letter rise, masked to the line band.
+function riseText(str, px, py, size, color, t0, t, opts = {}) {
+  const { weight = 900, align = 'left', stagger = 0.035, dur = 0.42, track = -0.03 } = opts;
+  x.save();
+  x.font = font(weight, size);
+  x.letterSpacing = (size * track) + 'px';
+  x.textBaseline = 'alphabetic';
+  const total = x.measureText(str).width;
+  let cx = align === 'center' ? px - total / 2 : align === 'right' ? px - total : px;
+  x.beginPath();
+  x.rect(cx - size, py - size * 1.0, total + size * 2, size * 1.3);
+  x.clip();
+  x.fillStyle = color;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    const w = x.measureText(ch).width;
+    const v = eOE(p(t, t0 + i * stagger, t0 + i * stagger + dur));
+    if (v > 0) {
+      x.save();
+      x.translate(cx + w / 2, py + (1 - v) * size * 1.1);
+      x.rotate((1 - v) * 0.25);
+      x.fillText(ch, -w / 2, 0);
+      x.restore();
+    }
+    cx += w;
+  }
+  x.restore();
+  return total;
+}
+
+// ---------- camera shake ----------
+const IMPACTS = [[0.5, 14], [2.0, 16], [3.5, 14], [5.0, 14], [6.5, 14], [8.8, 10], [10.3, 10], [13.0, 26]];
+function shake(t) {
+  let a = 0;
+  for (const [ti, amp] of IMPACTS) if (t >= ti) a += amp * Math.exp(-(t - ti) * 11);
+  return [Math.sin(t * 97.3) * a, Math.cos(t * 83.1) * a];
+}
+
+// ---------- icons (origin = ground contact, facing right) ----------
+function drawCar(body, wheel, hole, roll) {
+  // cabin
+  x.fillStyle = body;
+  x.beginPath();
+  x.moveTo(-150, -150); x.lineTo(-95, -250); x.quadraticCurveTo(-85, -262, -65, -262);
+  x.lineTo(85, -262); x.quadraticCurveTo(105, -262, 118, -248); x.lineTo(185, -150); x.closePath();
+  x.fill();
+  rr(-225, -165, 450, 115, 34); x.fill();
+  // windows
+  x.fillStyle = hole;
+  x.beginPath(); x.moveTo(-118, -158); x.lineTo(-78, -236); x.lineTo(-12, -236); x.lineTo(-12, -158); x.closePath(); x.fill();
+  x.beginPath(); x.moveTo(8, -158); x.lineTo(8, -236); x.lineTo(92, -236); x.lineTo(150, -158); x.closePath(); x.fill();
+  // lights + door line
+  x.fillStyle = WH; rr(196, -140, 26, 22, 8); x.fill();
+  x.fillStyle = '#FF5A3C'; rr(-224, -140, 18, 22, 6); x.fill();
+  x.strokeStyle = hole; x.lineWidth = 6; x.beginPath(); x.moveTo(-2, -150); x.lineTo(-2, -70); x.stroke();
+  // wheels
+  for (const wx of [-130, 130]) {
+    x.fillStyle = wheel; circle(wx, -50, 52); x.fill();
+    x.fillStyle = hole; circle(wx, -50, 22); x.fill();
+    x.save(); x.translate(wx, -50); x.rotate(roll);
+    x.strokeStyle = wheel; x.lineWidth = 7;
+    x.beginPath(); x.moveTo(-20, 0); x.lineTo(20, 0); x.moveTo(0, -20); x.lineTo(0, 20); x.stroke();
+    x.restore();
+  }
+}
+
+function drawBike(body, accent, hole, roll) {
+  // wheels
+  for (const wx of [-160, 165]) {
+    x.strokeStyle = body; x.lineWidth = 26; circle(wx, -72, 60); x.stroke();
+    x.save(); x.translate(wx, -72); x.rotate(roll);
+    x.lineWidth = 6; x.beginPath();
+    for (let k = 0; k < 3; k++) { const a = k * Math.PI / 3; x.moveTo(Math.cos(a) * -46, Math.sin(a) * -46); x.lineTo(Math.cos(a) * 46, Math.sin(a) * 46); }
+    x.stroke(); x.restore();
+    x.fillStyle = body; circle(wx, -72, 14); x.fill();
+  }
+  // frame / body
+  x.fillStyle = body;
+  x.beginPath();
+  x.moveTo(-165, -150); x.lineTo(-40, -170); x.lineTo(40, -205); x.lineTo(115, -200);
+  x.lineTo(150, -150); x.lineTo(60, -110); x.lineTo(-70, -100); x.closePath(); x.fill();
+  x.strokeStyle = body; x.lineWidth = 20; x.lineCap = 'round';
+  x.beginPath(); x.moveTo(110, -200); x.lineTo(165, -72); x.stroke(); // fork
+  x.beginPath(); x.moveTo(-70, -110); x.lineTo(-160, -72); x.stroke(); // swing arm
+  x.beginPath(); x.moveTo(110, -205); x.lineTo(135, -265); x.stroke(); // bars
+  // seat
+  x.fillStyle = hole; rr(-120, -192, 120, 26, 13); x.fill();
+  // headlight
+  x.fillStyle = accent; circle(150, -205, 16); x.fill();
+  // rider
+  x.strokeStyle = accent; x.lineWidth = 46;
+  x.beginPath(); x.moveTo(-60, -200); x.lineTo(-10, -320); x.stroke();      // torso
+  x.lineWidth = 22;
+  x.beginPath(); x.moveTo(-5, -300); x.lineTo(80, -265); x.lineTo(132, -262); x.stroke(); // arm
+  x.lineWidth = 30;
+  x.beginPath(); x.moveTo(-60, -195); x.lineTo(30, -170); x.lineTo(40, -120); x.stroke(); // leg
+  x.fillStyle = accent; circle(5, -385, 48); x.fill();                      // helmet
+  x.fillStyle = body; rr(10, -400, 50, 28, 12); x.fill();                    // visor
+  x.lineCap = 'butt';
+}
+
+function drawBowl(body, food, hole, lt) {
+  // steam
+  x.strokeStyle = food; x.lineWidth = 10; x.lineCap = 'round';
+  for (let k = 0; k < 3; k++) {
+    const a = clamp(0.8 * Math.sin((lt * 2.2 + k * 0.33) * Math.PI) ** 2);
+    x.globalAlpha = a * 0.85;
+    const sx = -80 + k * 80;
+    x.beginPath();
+    for (let s = 0; s <= 20; s++) {
+      const yy = -320 - s * 9 - (lt * 60 % 30);
+      const xx = sx + Math.sin(s * 0.45 + lt * 8 + k) * 16;
+      s ? x.lineTo(xx, yy) : x.moveTo(xx, yy);
+    }
+    x.stroke();
+  }
+  x.globalAlpha = 1;
+  // chopsticks
+  x.strokeStyle = food; x.lineWidth = 12;
+  x.beginPath(); x.moveTo(30, -230); x.lineTo(210, -430); x.moveTo(60, -225); x.lineTo(245, -405); x.stroke();
+  // food heap
+  x.fillStyle = food;
+  for (const [fx, fy, fr] of [[-110, -205, 46], [-50, -230, 56], [20, -225, 52], [85, -208, 46], [130, -195, 30]]) { circle(fx, fy, fr); x.fill(); }
+  x.fillStyle = '#FF5A3C'; circle(-30, -250, 16); x.fill(); circle(60, -240, 13); x.fill();
+  x.fillStyle = '#3DBE6E'; circle(10, -262, 12); x.fill();
+  // bowl
+  x.fillStyle = body;
+  x.beginPath(); x.arc(0, -190, 200, 0, Math.PI); x.closePath(); x.fill();
+  rr(-215, -205, 430, 30, 15); x.fill();
+  rr(-70, -10, 140, 12, 6); x.fill();
+  x.fillStyle = hole; x.globalAlpha = 0.25; rr(-150, -130, 300, 14, 7); x.fill(); x.globalAlpha = 1;
+  x.lineCap = 'butt';
+}
+
+function drawBox(body, tape, label, squash) {
+  x.save();
+  x.scale(1 + squash * 0.12, 1 - squash * 0.12);
+  x.fillStyle = body; rr(-175, -330, 350, 330, 20); x.fill();
+  x.fillStyle = tape; x.fillRect(-32, -330, 64, 330);
+  x.fillStyle = tape; x.globalAlpha = 0.6; x.fillRect(-175, -268, 350, 8); x.globalAlpha = 1;
+  x.fillStyle = label; rr(65, -130, 90, 100, 8); x.fill();
+  x.fillStyle = body;
+  for (let k = 0; k < 4; k++) x.fillRect(78, -112 + k * 20, 64 - (k % 2) * 22, 8);
+  // up arrows
+  x.strokeStyle = label; x.lineWidth = 10; x.lineCap = 'round'; x.lineJoin = 'round';
+  for (const ax of [-140, -100]) { x.beginPath(); x.moveTo(ax, -170); x.lineTo(ax, -220); x.moveTo(ax - 14, -205); x.lineTo(ax, -222); x.lineTo(ax + 14, -205); x.stroke(); }
+  x.restore();
+  x.lineCap = 'butt'; x.lineJoin = 'miter';
+}
+
+// ---------- SCENE 1: intro ----------
+function scene1(t) {
+  x.fillStyle = K; x.fillRect(0, 0, W, H);
+  // pulse rings
+  for (let k = 0; k < 3; k++) {
+    const v = p(t, 0.05 + k * 0.08, 0.6 + k * 0.08);
+    if (v > 0 && v < 1) {
+      x.strokeStyle = Y; x.globalAlpha = 1 - v; x.lineWidth = 6;
+      circle(W / 2, H / 2, 60 + eOC(v) * 600); x.stroke(); x.globalAlpha = 1;
+    }
+  }
+  const pop = eOB(p(t, 0, 0.16)) * 42;
+  const burst = eIE(p(t, 0.18, 0.5)) * 1250;
+  x.fillStyle = Y; circle(W / 2, H / 2, pop + burst); x.fill();
+
+  if (t > 0.45) {
+    riseText('YOUR CITY.', 170, 500, 210, K, 0.55, t);
+    riseText('ON DEMAND.', 170, 720, 210, K, 1.05, t);
+    // small meta labels
+    const a = p(t, 0.7, 0.9);
+    x.globalAlpha = a; x.fillStyle = K; x.font = font(700, 30); x.letterSpacing = '6px';
+    x.fillText('RIDES · BIKES · FOOD · DELIVERY', 178, 820);
+    x.globalAlpha = 1; x.letterSpacing = '0px';
+    // little arrow drawing in
+    const av = eOC(p(t, 1.25, 1.6));
+    x.strokeStyle = K; x.lineWidth = 16; x.lineCap = 'round';
+    x.beginPath(); x.moveTo(1520, 640); x.lineTo(1520 + 240 * av, 640); x.stroke();
+    if (av > 0.9) { x.beginPath(); x.moveTo(1710, 590); x.lineTo(1760, 640); x.lineTo(1710, 690); x.stroke(); }
+    x.lineCap = 'butt';
+  }
+  // diagonal stripe wipe → ink
+  const sv = p(t, 1.72, 2.0);
+  if (sv > 0) {
+    x.fillStyle = K;
+    const n = 9, bw = 360;
+    for (let k = 0; k < n; k++) {
+      const v = eIOC(clamp(sv * 1.6 - k * 0.07));
+      const bx = -600 + k * (bw - 60);
+      x.save(); x.translate(bx, 0); x.transform(1, 0, -0.45, 1, 0, 0);
+      x.fillRect(0, H - v * (H + 20), bw, v * (H + 20) + 10);
+      x.restore();
+    }
+  }
+}
+
+// ---------- SCENE 2: services ----------
+const SVCS = [
+  { w: 'RIDE', sub: 'Cars at your tap', icon: 'car', bg: K, fg: Y, tx: WH },
+  { w: 'BIKE', sub: 'Beat the traffic', icon: 'bike', bg: Y, fg: K, tx: K },
+  { w: 'FOOD', sub: 'Cravings, delivered', icon: 'food', bg: K, fg: Y, tx: WH },
+  { w: 'DELIVERY', sub: 'Send it across town', icon: 'box', bg: Y, fg: K, tx: K },
+];
+const GROUND = 820;
+
+function iconX(lt) {
+  return lerp(-520, 600, eOE(p(lt, 0, 0.5))) + eIE(p(lt, 1.22, 1.5)) * 1700;
+}
+
+function service(i, lt) {
+  const s = SVCS[i];
+  x.fillStyle = s.bg; x.fillRect(0, 0, W, H);
+
+  // giant outline type, two rows drifting opposite ways
+  x.save();
+  x.font = font(900, 360); x.letterSpacing = '-8px';
+  x.strokeStyle = s.fg; x.globalAlpha = 0.16; x.lineWidth = 3;
+  const row = (s.w + '  ').repeat(6);
+  const rw = x.measureText(s.w + '  ').width;
+  x.strokeText(row, -((lt * 260) % rw) - 200, 330);
+  x.strokeText(row, ((lt * 260) % rw) - rw - 200, 1080 + 40);
+  x.restore();
+
+  // road
+  x.fillStyle = s.fg; x.globalAlpha = 0.35; x.fillRect(0, GROUND + 4, W, 6); x.globalAlpha = 0.6;
+  const off = (lt * 1500) % 200;
+  for (let dx = -off; dx < W; dx += 200) x.fillRect(dx, GROUND + 50, 110, 10);
+  x.globalAlpha = 1;
+
+  // icon
+  const ix = iconX(lt), vx = (ix - iconX(lt - 1 / 30)) * 30;
+  let iy = GROUND, rot = 0, squash = 0;
+  if (s.icon === 'food' || s.icon === 'box') {
+    const dv = p(lt, 0, 0.42);
+    iy = lerp(-200, GROUND, s.icon === 'food' ? eOB(dv) : (dv < 1 ? eIC(dv) : 1));
+    if (s.icon === 'box') {
+      const b = p(lt, 0.42, 0.9);
+      squash = b > 0 && b < 1 ? Math.sin(b * Math.PI * 3) * Math.exp(-b * 4) : 0;
+      rot = (1 - eOE(p(lt, 0, 0.5))) * -0.25;
+    }
+  } else {
+    rot = -(1 - eOC(p(lt, 0.05, 0.55))) * 0.08 + Math.sin(lt * 30) * 0.004;
+    iy = GROUND + Math.abs(Math.sin(lt * 18)) * -3;
+  }
+  const dropX = s.icon === 'food' || s.icon === 'box' ? 600 + eIE(p(lt, 1.22, 1.5)) * 1700 : ix;
+
+  // shadow
+  x.fillStyle = s.fg; x.globalAlpha = 0.18;
+  x.beginPath(); x.ellipse(dropX, GROUND + 6, 230 * clamp(iy / GROUND, 0.3, 1), 16, 0, 0, Math.PI * 2); x.fill();
+  x.globalAlpha = 1;
+
+  // speed lines trailing the icon
+  const speed = Math.abs(s.icon === 'car' || s.icon === 'bike' ? vx : (dropX - (600 + eIE(p(lt - 1 / 30, 1.22, 1.5)) * 1700)) * 30);
+  if (speed > 200) {
+    x.strokeStyle = s.fg; x.lineCap = 'round';
+    for (let k = 0; k < 5; k++) {
+      const len = clamp(speed / 6, 0, 520) * (0.6 + 0.4 * ((k * 37) % 7) / 7);
+      const ly = GROUND - 60 - k * 55;
+      x.globalAlpha = 0.55; x.lineWidth = 8 - k;
+      x.beginPath(); x.moveTo(dropX - 260, ly); x.lineTo(dropX - 260 - len, ly); x.stroke();
+    }
+    x.globalAlpha = 1; x.lineCap = 'butt';
+  }
+
+  x.save();
+  x.translate(dropX, iy); x.rotate(rot);
+  const roll = ix / 52;
+  if (s.icon === 'car') drawCar(s.fg, WH, s.bg, roll);
+  if (s.icon === 'bike') drawBike(s.fg, WH, s.bg, roll);
+  if (s.icon === 'food') drawBowl(s.fg, WH, s.bg, lt);
+  if (s.icon === 'box') drawBox(s.fg, '#333333', WH, squash);
+  x.restore();
+
+  // labels
+  const tx0 = 1060;
+  const nv = eOE(p(lt, 0.08, 0.4));
+  x.globalAlpha = nv; x.fillStyle = s.fg; x.font = font(800, 44); x.letterSpacing = '4px';
+  x.fillText('0' + (i + 1) + ' /', tx0 + (1 - nv) * 60, 400);
+  x.globalAlpha = 1; x.letterSpacing = '0px';
+
+  x.save();
+  x.font = font(900, 230); x.letterSpacing = '-8px';
+  const ww = x.measureText(s.w).width;
+  const fit = Math.min(1, 780 / ww);
+  const sv = eOE(p(lt, 0.12, 0.4));
+  const sc = fit * lerp(1.7, 1, sv);
+  x.globalAlpha = p(lt, 0.12, 0.2);
+  x.translate(tx0, 610); x.scale(sc, sc);
+  x.fillStyle = s.tx; x.fillText(s.w, 0, 0);
+  x.restore();
+
+  const uv = eOE(p(lt, 0.3, 0.7));
+  x.fillStyle = s.fg; x.fillRect(tx0, 650, 780 * uv, 12);
+
+  x.save();
+  x.beginPath(); x.rect(tx0, 670, 900, 100); x.clip();
+  const subv = eOE(p(lt, 0.38, 0.8));
+  x.fillStyle = s.tx; x.font = font(600, 56);
+  x.fillText(s.sub, tx0, 740 + (1 - subv) * 80);
+  x.restore();
+}
+
+function scene2(t) {
+  const lt = t - 2, i = Math.min(3, Math.floor(lt / 1.5)), l = lt - i * 1.5;
+  if (i > 0 && l < 0.34) {
+    service(i - 1, l + 1.5);
+    x.save();
+    circle(1500, 560, eIOC(p(l, 0, 0.34)) * 2100);
+    x.clip();
+    service(i, l);
+    x.restore();
+  } else service(i, l);
+}
+
+// ---------- SCENE 3: stats + globe ----------
+const CITIES = [[3.1, 101.7], [-6.2, 106.8], [14.6, 121], [-23.5, -46.6], [-26.2, 28], [51.1, 71.4], [21, 105.8], [13.7, 100.5], [-34.6, -58.4], [5.4, 100.3], [1.5, 103.7]];
+const DOTS = [];
+for (let lat = -80; lat <= 80; lat += 7) {
+  const n = Math.max(6, Math.round(52 * Math.cos(lat * Math.PI / 180)));
+  for (let k = 0; k < n; k++) DOTS.push([lat, k * 360 / n]);
+}
+function proj(lat, lon, rot, R, cx, cy, lift = 1) {
+  const la = lat * Math.PI / 180, lo = lon * Math.PI / 180 + rot, tilt = -0.32;
+  let px = Math.cos(la) * Math.sin(lo), py = -Math.sin(la), pz = Math.cos(la) * Math.cos(lo);
+  const y2 = py * Math.cos(tilt) - pz * Math.sin(tilt), z2 = py * Math.sin(tilt) + pz * Math.cos(tilt);
+  return [cx + px * R * lift, cy + y2 * R * lift, z2];
+}
+
+function globe(t) {
+  const target = -101.7 * Math.PI / 180;
+  const rot = lerp(target + 2.6, target, eIOC(p(t, 8.0, 10.5))) + Math.max(0, t - 10.5) * 0.15;
+  const sc = eOB(p(t, 8.0, 8.6)) * lerp(1, 1.12, eIOC(p(t, 9.4, 10.6)));
+  const R = 390 * sc, cx = 1390, cy = 540;
+  // glow
+  const g = x.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 1.35);
+  g.addColorStop(0, 'rgba(255,210,31,0.16)'); g.addColorStop(1, 'rgba(255,210,31,0)');
+  x.fillStyle = g; circle(cx, cy, R * 1.4); x.fill();
+  x.strokeStyle = 'rgba(255,210,31,0.35)'; x.lineWidth = 2; circle(cx, cy, R); x.stroke();
+  x.fillStyle = Y;
+  for (const [la, lo] of DOTS) {
+    const [px, py, z] = proj(la, lo, rot, R, cx, cy);
+    if (z < -0.05) continue;
+    x.globalAlpha = 0.18 + 0.75 * z;
+    x.beginPath(); x.arc(px, py, 2 + 2.8 * z, 0, Math.PI * 2); x.fill();
+  }
+  x.globalAlpha = 1;
+  // arcs between cities
+  const av = p(t, 8.4, 10.2);
+  for (let k = 0; k < CITIES.length - 1; k++) {
+    const a = CITIES[k], b = CITIES[(k * 3 + 4) % CITIES.length];
+    const segV = clamp(av * 1.8 - k * 0.08);
+    if (segV <= 0) continue;
+    x.strokeStyle = WH; x.lineWidth = 3; x.globalAlpha = 0.7; x.beginPath();
+    let started = false;
+    const N = 40;
+    for (let s = 0; s <= N * segV; s++) {
+      const f = s / N;
+      const la = lerp(a[0], b[0], f), lo = lerp(a[1], b[1], f);
+      const [px, py, z] = proj(la, lo, rot, R, cx, cy, 1 + Math.sin(f * Math.PI) * 0.18);
+      if (z < 0) { started = false; continue; }
+      started ? x.lineTo(px, py) : x.moveTo(px, py); started = true;
+    }
+    x.stroke(); x.globalAlpha = 1;
+  }
+  // city pings
+  CITIES.forEach(([la, lo], k) => {
+    const [px, py, z] = proj(la, lo, rot, R, cx, cy);
+    if (z < 0.05) return;
+    const appear = eOB(p(t, 8.3 + k * 0.06, 8.6 + k * 0.06));
+    const my = k === 0 && t > 9.6;
+    x.fillStyle = my ? WH : Y; circle(px, py, (my ? 12 : 7) * appear * (0.5 + z / 2)); x.fill();
+    const ph = ((t * 1.4 + k * 0.17) % 1);
+    x.strokeStyle = my ? WH : Y; x.lineWidth = 3; x.globalAlpha = (1 - ph) * z * appear;
+    circle(px, py, 8 + ph * (my ? 70 : 34)); x.stroke(); x.globalAlpha = 1;
+    if (my) {
+      const lv = eOE(p(t, 9.9, 10.3));
+      x.globalAlpha = lv; x.fillStyle = WH; x.font = font(800, 34); x.letterSpacing = '3px';
+      x.fillText('MALAYSIA', px + 30, py - 24 - (1 - lv) * 20); x.globalAlpha = 1; x.letterSpacing = '0px';
+    }
+  });
+}
+
+function statBlock(t, t0, caption, num, label1, label2, outT) {
+  const ov = eIE(p(t, outT, outT + 0.22));
+  if (ov >= 1) return;
+  x.save();
+  x.translate(0, -ov * 260); x.globalAlpha = 1 - ov;
+  const cv = eOE(p(t, t0, t0 + 0.3));
+  x.fillStyle = Y; x.font = font(800, 36); x.letterSpacing = '8px';
+  x.globalAlpha *= cv; x.fillText(caption, 170 + (1 - cv) * 40, 290); x.globalAlpha = 1 - ov;
+  x.letterSpacing = '0px';
+  const n = Math.round(eOC(p(t, t0 + 0.1, t0 + 0.8)) * num);
+  const pv = eOB(p(t, t0 + 0.75, t0 + 0.95));
+  x.save();
+  x.translate(170, 590);
+  const s = lerp(0.85, 1, eOE(p(t, t0, t0 + 0.3))) * (1 + (t > t0 + 0.8 ? 0.06 * Math.exp(-(t - t0 - 0.8) * 9) : 0));
+  x.scale(s, s);
+  x.font = font(900, 330); x.letterSpacing = '-12px'; x.fillStyle = Y;
+  const nw = x.measureText(String(n)).width;
+  x.fillText(String(n), 0, 0);
+  x.save(); x.translate(nw + 20, -150); x.scale(pv, pv); x.fillText('+', -40, 120); x.restore();
+  x.restore();
+  riseText(label1, 175, 720, 92, WH, t0 + 0.25, t);
+  if (label2) riseText(label2, 175, 820, 92, WH, t0 + 0.35, t);
+  x.restore();
+}
+
+function scene3(t) {
+  x.fillStyle = K; x.fillRect(0, 0, W, H);
+  globe(t);
+  statBlock(t, 8.05, 'ACTIVE IN', 20, 'COUNTRIES', null, 9.38);
+  if (t > 9.45) statBlock(t, 9.55, 'RIDING IN', 70, 'CITIES IN', 'MALAYSIA', 99);
+}
+
+// ---------- SCENE 4: phone ----------
+const PH = { cx: 1290, cy: 540, w: 450, h: 900 };
+const ROUTE = [[-130, 230], [-130, 110], [-20, 110], [-20, -20], [110, -20], [110, -170]];
+function routeLen() { let L = 0; for (let k = 1; k < ROUTE.length; k++) L += Math.hypot(ROUTE[k][0] - ROUTE[k - 1][0], ROUTE[k][1] - ROUTE[k - 1][1]); return L; }
+function routeAt(f) {
+  let d = f * routeLen();
+  for (let k = 1; k < ROUTE.length; k++) {
+    const sl = Math.hypot(ROUTE[k][0] - ROUTE[k - 1][0], ROUTE[k][1] - ROUTE[k - 1][1]);
+    if (d <= sl) { const v = d / sl; return [lerp(ROUTE[k - 1][0], ROUTE[k][0], v), lerp(ROUTE[k - 1][1], ROUTE[k][1], v)]; }
+    d -= sl;
+  }
+  return ROUTE[ROUTE.length - 1];
+}
+
+function phone(t) {
+  const { w, h } = PH;
+  // body
+  x.fillStyle = 'rgba(0,0,0,0.18)'; rr(-w / 2 + 30, -h / 2 + 40, w, h, 64); x.fill();
+  x.fillStyle = K; rr(-w / 2, -h / 2, w, h, 64); x.fill();
+  const sw = w - 32, sh = h - 32;
+  x.save();
+  rr(-sw / 2, -sh / 2, sw, sh, 48); x.clip();
+  x.fillStyle = CREAM; x.fillRect(-sw / 2, -sh / 2, sw, sh);
+  // map blocks & streets
+  x.fillStyle = '#E9E3D2';
+  for (let gx = -4; gx <= 4; gx++) for (let gy = -6; gy <= 6; gy++) {
+    if ((gx * 7 + gy * 3) % 5 === 0) continue;
+    rr(gx * 130 - 50, gy * 130 - 45, 105, 105, 14); x.fill();
+  }
+  x.fillStyle = '#CDE8C4'; rr(-200, -330, 160, 120, 20); x.fill();
+  x.fillStyle = '#BFDDF0'; rr(60, 190, 200, 90, 30); x.fill();
+  // route
+  const rv = eIOC(p(t, 11.35, 11.95));
+  if (rv > 0) {
+    const L = routeLen();
+    x.strokeStyle = K; x.lineWidth = 12; x.lineJoin = 'round'; x.lineCap = 'round';
+    x.setLineDash([L * rv, L]);
+    x.beginPath(); ROUTE.forEach(([a, b], k) => k ? x.lineTo(a, b) : x.moveTo(a, b)); x.stroke();
+    x.setLineDash([]);
+    x.fillStyle = K; circle(ROUTE[0][0], ROUTE[0][1], 16); x.fill();
+    x.fillStyle = WH; circle(ROUTE[0][0], ROUTE[0][1], 6); x.fill();
+  }
+  // destination pin
+  const pv = eOB(p(t, 11.9, 12.15));
+  if (pv > 0) {
+    const [ex, ey] = ROUTE[ROUTE.length - 1];
+    x.save(); x.translate(ex, ey); x.scale(pv, pv);
+    x.fillStyle = K; x.beginPath(); x.arc(0, -46, 30, Math.PI, 0); x.lineTo(0, 0); x.closePath(); x.fill();
+    x.fillStyle = Y; circle(0, -46, 13); x.fill();
+    x.restore();
+  }
+  // driver car marker travelling
+  const cv = p(t, 12.3, 13.0);
+  if (t > 12.25) {
+    const [mx, my] = routeAt(eIOC(cv));
+    const [nx, ny] = routeAt(Math.min(1, eIOC(cv) + 0.01));
+    x.save(); x.translate(mx, my); x.rotate(Math.atan2(ny - my, nx - mx));
+    const ap = eOB(p(t, 12.25, 12.45)); x.scale(ap, ap);
+    x.fillStyle = Y; x.strokeStyle = K; x.lineWidth = 5; rr(-24, -15, 48, 30, 9); x.fill(); x.stroke();
+    x.restore();
+  }
+  // top status bar
+  x.fillStyle = K; rr(-60, -sh / 2 + 14, 120, 30, 15); x.fill();
+  // notification card
+  const nv = eOB(p(t, 12.2, 12.45));
+  if (nv > 0) {
+    x.save(); x.translate(0, -sh / 2 + 120); x.scale(nv, nv);
+    x.fillStyle = 'rgba(0,0,0,0.15)'; rr(-180, -48, 370, 104, 26); x.fill();
+    x.fillStyle = WH; rr(-185, -56, 370, 104, 26); x.fill();
+    x.fillStyle = Y; circle(-130, -4, 30); x.fill();
+    x.fillStyle = K; x.font = font(900, 30); x.textAlign = 'center'; x.fillText('✓', -130, 7); x.textAlign = 'left';
+    x.font = font(800, 28); x.fillText('Driver found', -84, -12);
+    x.fillStyle = '#6B6B6B'; x.font = font(600, 22); x.fillText('Arriving in 3 min', -84, 22);
+    x.restore();
+  }
+  // bottom sheet
+  x.fillStyle = WH; rr(-sw / 2, sh / 2 - 240, sw, 260, 36); x.fill();
+  x.fillStyle = '#DDD'; rr(-30, sh / 2 - 226, 60, 8, 4); x.fill();
+  x.fillStyle = '#8A8A8A'; x.font = font(600, 22); x.fillText('Where to?', -sw / 2 + 32, sh / 2 - 180);
+  x.fillStyle = K; x.font = font(800, 30); x.fillText('KLCC, Kuala Lumpur', -sw / 2 + 32, sh / 2 - 142);
+  const press = 1 - 0.06 * Math.sin(Math.PI * p(t, 11.97, 12.12));
+  x.save(); x.translate(0, sh / 2 - 66); x.scale(press, press);
+  x.fillStyle = t > 12.05 ? K : Y; rr(-sw / 2 + 28, -44, sw - 56, 88, 44); x.fill();
+  x.fillStyle = t > 12.05 ? Y : K; x.font = font(900, 34); x.letterSpacing = '4px'; x.textAlign = 'center';
+  x.fillText(t > 12.05 ? 'ON THE WAY' : 'ORDER', 0, 12); x.textAlign = 'left'; x.letterSpacing = '0px';
+  x.restore();
+  // ripple
+  const rp = p(t, 12.0, 12.4);
+  if (rp > 0 && rp < 1) {
+    x.strokeStyle = Y; x.lineWidth = 6; x.globalAlpha = 1 - rp;
+    circle(40, sh / 2 - 66, 20 + eOC(rp) * 200); x.stroke(); x.globalAlpha = 1;
+  }
+  x.restore();
+  // notch
+  x.fillStyle = K; rr(-70, -h / 2 + 10, 140, 34, 17); x.fill();
+  // finger / touch indicator
+  const fin = eOC(p(t, 11.55, 11.95)), fout = eIC(p(t, 12.15, 12.45));
+  if (fin > 0 && fout < 1) {
+    const fx = lerp(330, 40, fin) + fout * 300, fy = lerp(650, sh / 2 - 66, fin) + fout * 250;
+    const fp = 1 - 0.25 * Math.sin(Math.PI * p(t, 11.97, 12.12));
+    x.fillStyle = 'rgba(255,255,255,0.85)'; x.strokeStyle = K; x.lineWidth = 6;
+    circle(fx, fy, 38 * fp); x.fill(); x.stroke();
+  }
+}
+
+function scene4(t) {
+  x.fillStyle = Y; x.fillRect(0, 0, W, H);
+  // background map grid lines, drifting
+  x.strokeStyle = K; x.globalAlpha = 0.07; x.lineWidth = 2;
+  const o = (t * 40) % 120;
+  for (let gx = -120 + o; gx < W; gx += 120) { x.beginPath(); x.moveTo(gx, 0); x.lineTo(gx, H); x.stroke(); }
+  for (let gy = -120 + o; gy < H; gy += 120) { x.beginPath(); x.moveTo(0, gy); x.lineTo(W, gy); x.stroke(); }
+  x.globalAlpha = 1;
+
+  riseText('Tap.', 180, 400, 170, K, 11.45, t);
+  riseText('Track.', 180, 590, 170, K, 11.95, t);
+  riseText('Arrive.', 180, 780, 170, K, 12.42, t);
+
+  const zoom = eIE(p(t, 12.62, 13.0));
+  const rise = 1 - eOE(p(t, 10.95, 11.45));
+  x.save();
+  x.translate(PH.cx, PH.cy + rise * 1000);
+  x.rotate(rise * 0.25 + Math.sin(t * 2) * 0.01);
+  x.scale(1 + zoom * 5, 1 + zoom * 5);
+  phone(t);
+  x.restore();
+}
+
+// ---------- SCENE 5: logo ----------
+const PARTS = Array.from({ length: 46 }, (_, k) => {
+  const a = k * 2.399 + 0.3, sp = 500 + ((k * 73) % 11) * 90;
+  return { a, sp, s: 8 + (k * 13) % 18, c: k % 3 === 0 ? WH : K, sq: k % 2 === 0 };
+});
+
+function scene5(t) {
+  const lt = t - 13;
+  x.fillStyle = Y; x.fillRect(0, 0, W, H);
+  const gz = lerp(1, 1.05, p(t, 13, 15));
+  x.save(); x.translate(W / 2, H / 2); x.scale(gz, gz);
+
+  // rotating rays
+  const rv = eOE(p(lt, 0, 0.6));
+  x.save(); x.rotate(lt * 0.25);
+  x.fillStyle = Y2;
+  for (let k = 0; k < 18; k++) {
+    x.rotate(Math.PI * 2 / 18);
+    x.beginPath(); x.moveTo(0, 0); x.lineTo(1400 * rv, -110); x.lineTo(1400 * rv, 110); x.closePath(); x.fill();
+  }
+  x.restore();
+
+  // shockwave ring
+  const sv = p(lt, 0, 0.7);
+  if (sv < 1) { x.strokeStyle = K; x.lineWidth = 18 * (1 - sv); circle(0, -20, eOC(sv) * 1100); x.stroke(); }
+
+  // particles
+  for (const q of PARTS) {
+    const v = eOC(p(lt, 0, 1.3)), d = q.sp * v;
+    const al = 1 - p(lt, 0.6, 1.4);
+    if (al <= 0) continue;
+    x.globalAlpha = al; x.fillStyle = q.c;
+    const px = Math.cos(q.a) * d, py = Math.sin(q.a) * d * 0.7;
+    if (q.sq) { x.save(); x.translate(px, py); x.rotate(lt * 6 + q.a); x.fillRect(-q.s / 2, -q.s / 2, q.s, q.s); x.restore(); }
+    else { circle(px, py, q.s / 2); x.fill(); }
+  }
+  x.globalAlpha = 1;
+
+  // wordmark
+  const word = 'maxim';
+  x.font = font(900, 330); x.letterSpacing = '-14px';
+  const tw = x.measureText(word).width;
+  let cx = -tw / 2;
+  x.fillStyle = K;
+  for (let k = 0; k < word.length; k++) {
+    const ch = word[k], cw = x.measureText(ch).width;
+    const v = spring(p(lt, 0.02 + k * 0.06, 0.02 + k * 0.06 + 0.9));
+    x.save();
+    x.translate(cx + cw / 2, 40 + (1 - v) * 120);
+    x.scale(v, v);
+    x.fillText(ch, -cw / 2, 0);
+    x.restore();
+    cx += cw;
+  }
+  x.letterSpacing = '0px';
+
+  // swoosh underline
+  const uv = eOE(p(lt, 0.4, 0.85));
+  x.strokeStyle = K; x.lineWidth = 16; x.lineCap = 'round';
+  x.beginPath();
+  for (let s = 0; s <= 40 * uv; s++) {
+    const f = s / 40, px = lerp(-tw / 2 + 20, tw / 2 - 20, f), py = 110 + Math.sin(f * Math.PI) * 26;
+    s ? x.lineTo(px, py) : x.moveTo(px, py);
+  }
+  if (uv > 0) x.stroke();
+  x.lineCap = 'butt';
+
+  riseText('Ride. Deliver. Anything.', 0, 230, 66, K, 13.6, t, { weight: 700, align: 'center', stagger: 0.015, track: 0 });
+
+  const bv = eOB(p(lt, 1.0, 1.3));
+  if (bv > 0) {
+    x.save(); x.translate(0, 345); x.scale(bv, bv);
+    x.fillStyle = K; rr(-230, -42, 460, 84, 42); x.fill();
+    x.fillStyle = Y; x.font = font(800, 32); x.letterSpacing = '3px'; x.textAlign = 'center';
+    x.fillText('DOWNLOAD THE APP', 0, 11); x.textAlign = 'left'; x.letterSpacing = '0px';
+    x.restore();
+  }
+  x.restore();
+
+  // white flash
+  const fl = 1 - p(lt, 0, 0.22);
+  if (fl > 0) { x.fillStyle = WH; x.globalAlpha = fl * 0.9; x.fillRect(0, 0, W, H); x.globalAlpha = 1; }
+}
+
+// ---------- compose ----------
+function drawAt(t) {
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.fillStyle = K; x.fillRect(0, 0, W, H);
+  const [sx, sy] = shake(t);
+  x.save(); x.translate(sx, sy);
+  x.translate(W / 2, H / 2); x.scale(1.02, 1.02); x.translate(-W / 2, -H / 2); // headroom for shake
+
+  if (t < 2) scene1(t);
+  else if (t < 8) scene2(t);
+  else if (t < 8.34) {
+    service(3, t - 6.5);
+    x.save(); circle(W / 2, H / 2, eIOC(p(t, 8, 8.34)) * 1150); x.clip(); scene3(t); x.restore();
+  } else if (t < 10.9) scene3(t);
+  else if (t < 13) {
+    const v = eIOC(p(t, 10.9, 11.2));
+    if (v < 1) { x.save(); x.translate(0, -v * H); scene3(t); x.restore(); }
+    x.save(); x.translate(0, (1 - v) * H); scene4(t); x.restore();
+  } else scene5(t);
+  x.restore();
+
+  // vignette
+  const g = x.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 1.05);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.22)');
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+}
+
+// motion-blurred frame: average several sub-frame samples across a 180° shutter
+window.frame = function (t, samples = 5, fps = 30) {
+  const shutter = 0.5 / fps;
+  octx.globalAlpha = 1;
+  for (let k = 0; k < samples; k++) {
+    const ts = Math.min(DUR - 1e-4, t + (k / samples) * shutter);
+    drawAt(ts);
+    octx.globalAlpha = 1 / (k + 1);
+    octx.drawImage(buf, 0, 0);
+  }
+  octx.globalAlpha = 1;
+};
+
+// live preview when opened in a browser
+if (!window.__RENDER__) {
+  const t0 = performance.now();
+  (function loop() { window.frame(((performance.now() - t0) / 1000) % DUR, 1); requestAnimationFrame(loop); })();
+}
+</script>
+</body>
+</html>

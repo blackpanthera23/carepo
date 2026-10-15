@@ -1,0 +1,533 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>KQuran Promo</title>
+<style>
+  @font-face { font-family: 'Amiri'; font-weight: 700; src: url(fonts/amiri-arabic-700.woff2) format('woff2'); }
+  @font-face { font-family: 'Playfair'; font-weight: 800; src: url(fonts/playfair-800.woff2) format('woff2'); }
+  @font-face { font-family: 'Jakarta'; font-weight: 600; src: url(fonts/jakarta-600.woff2) format('woff2'); }
+  @font-face { font-family: 'Jakarta'; font-weight: 800; src: url(fonts/jakarta-800.woff2) format('woff2'); }
+  html, body { margin: 0; background: #08261D; }
+  canvas { display: block; width: 100vw; height: auto; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+const W = 1920, H = 1080, DUR = 15;
+const EM = '#0B3D2E', EM2 = '#11563F', INK = '#072519', GOLD = '#D9B45A', GOLD2 = '#F3DC93', CREAM = '#FBF6EA', WH = '#FFFFFF';
+const SERIF = '"Playfair", serif', SANS = '"Jakarta", "Inter", sans-serif', AR = '"Amiri", serif';
+
+const out = document.getElementById('c');
+const octx = out.getContext('2d');
+const buf = document.createElement('canvas');
+buf.width = W; buf.height = H;
+const x = buf.getContext('2d');
+
+// ---------- easing ----------
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const p = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, v) => a + (b - a) * v;
+const eOC = v => 1 - Math.pow(1 - v, 3);
+const eIOC = v => v < .5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2;
+const eOE = v => v >= 1 ? 1 : 1 - Math.pow(2, -10 * v);
+const eIE = v => v <= 0 ? 0 : Math.pow(2, 10 * v - 10);
+const eOB = v => { const c1 = 1.9, c3 = c1 + 1; return 1 + c3 * Math.pow(v - 1, 3) + c1 * Math.pow(v - 1, 2); };
+const spring = v => v <= 0 ? 0 : 1 - Math.exp(-7 * v) * Math.cos(13 * v);
+const F = (w, s, fam) => `${w} ${s}px ${fam}`;
+
+function rr(px, py, w, h, r) { x.beginPath(); x.roundRect(px, py, w, h, r); }
+function circle(cx, cy, r) { x.beginPath(); x.arc(cx, cy, Math.max(0, r), 0, Math.PI * 2); }
+
+function riseText(str, px, py, size, color, t0, t, o = {}) {
+  const { weight = 800, fam = SERIF, align = 'left', stagger = 0.03, dur = 0.45, track = 0 } = o;
+  x.save();
+  x.font = F(weight, size, fam);
+  x.letterSpacing = (size * track) + 'px';
+  const total = x.measureText(str).width;
+  let cx = align === 'center' ? px - total / 2 : align === 'right' ? px - total : px;
+  x.beginPath(); x.rect(cx - size, py - size * 1.05, total + size * 2, size * 1.4); x.clip();
+  x.fillStyle = color;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i], w = x.measureText(ch).width;
+    const v = eOE(p(t, t0 + i * stagger, t0 + i * stagger + dur));
+    if (v > 0) { x.fillText(ch, cx, py + (1 - v) * size * 1.15); }
+    cx += w;
+  }
+  x.restore();
+  return total;
+}
+
+// 8-point Islamic star {8/2}
+function starPath(cx, cy, r, rot = 0) {
+  x.beginPath();
+  for (let k = 0; k < 16; k++) {
+    const a = rot + k * Math.PI / 8 - Math.PI / 2;
+    const rad = k % 2 ? r * 0.7654 : r;
+    const px = cx + Math.cos(a) * rad, py = cy + Math.sin(a) * rad;
+    k ? x.lineTo(px, py) : x.moveTo(px, py);
+  }
+  x.closePath();
+}
+function starLen(r) { return 16 * Math.sqrt(r * r + (r * .7654) ** 2 - 2 * r * r * .7654 * Math.cos(Math.PI / 8)); }
+
+function pattern(t, color, alpha, reveal = 1, cx = W / 2, cy = H / 2, drift = 0) {
+  x.save();
+  x.strokeStyle = color; x.lineWidth = 2;
+  const S = 160;
+  for (let gx = -1; gx <= W / S + 1; gx++) for (let gy = -1; gy <= H / S + 1; gy++) {
+    const px = gx * S + (gy % 2 ? S / 2 : 0) + (drift % S), py = gy * S * 0.87;
+    const d = Math.hypot(px - cx, py - cy) / 1400;
+    const v = eOB(clamp((reveal - d) * 3));
+    if (v <= 0) continue;
+    x.globalAlpha = alpha * clamp(v);
+    starPath(px, py, 52 * v, t * 0.15);
+    x.stroke();
+    circle(px, py, 14 * v); x.stroke();
+  }
+  x.restore();
+}
+
+// ---------- camera shake ----------
+const IMPACTS = [[2.0, 8], [4.0, 10], [6.5, 8], [9.0, 22], [10.0, 8], [12.0, 10], [12.5, 18]];
+function shake(t) {
+  let a = 0;
+  for (const [ti, amp] of IMPACTS) if (t >= ti) a += amp * Math.exp(-(t - ti) * 11);
+  return [Math.sin(t * 97.3) * a, Math.cos(t * 83.1) * a];
+}
+
+// ---------- SCENE 1: hook (0–2) ----------
+function scene1(t) {
+  const g = x.createRadialGradient(W / 2, H / 2, 50, W / 2, H / 2, 1100);
+  g.addColorStop(0, EM2); g.addColorStop(1, INK);
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  pattern(t, GOLD, 0.16, lerp(0, 1.6, eOC(p(t, 0.35, 1.6))));
+
+  // hero star drawing itself
+  const dv = eIOC(p(t, 0, 0.7));
+  const R = 170 + eOB(p(t, 0.55, 0.9)) * 30;
+  x.save();
+  x.lineWidth = 6; x.strokeStyle = GOLD; x.lineJoin = 'round';
+  const L = starLen(R);
+  x.setLineDash([L * dv, L]);
+  starPath(W / 2, 330, R, t * 0.4); x.stroke();
+  x.setLineDash([]);
+  const iv = eOB(p(t, 0.5, 0.85));
+  x.lineWidth = 3; starPath(W / 2, 330, R * 0.62 * iv, -t * 0.6); x.stroke();
+  x.fillStyle = GOLD; circle(W / 2, 330, 18 * iv); x.fill();
+  x.restore();
+
+  riseText('Nak baca Al-Quran', W / 2, 700, 120, CREAM, 0.5, t, { align: 'center' });
+  riseText('dengan lancar?', W / 2, 850, 120, GOLD, 1.0, t, { align: 'center' });
+
+  // iris to cream
+  const cv = eIE(p(t, 1.7, 2.0));
+  if (cv > 0) { x.fillStyle = CREAM; circle(W / 2, 330, cv * 2300); x.fill(); }
+}
+
+// ---------- SCENE 2: Iqra letters (2–4) ----------
+const LETTERS = ['ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د'];
+function scene2(t) {
+  const lt = t - 2;
+  x.fillStyle = CREAM; x.fillRect(0, 0, W, H);
+  pattern(t, GOLD, 0.22, 2, W / 2, H / 2, lt * 40);
+
+  const up = eIOC(p(lt, 0.85, 1.25));      // cards move up to make room for text
+  const exit = eIE(p(lt, 1.72, 2.0));
+  const cw = 170, ch = 210, gap = 26;
+  const total = LETTERS.length * cw + (LETTERS.length - 1) * gap;
+  for (let i = 0; i < LETTERS.length; i++) {
+    const j = LETTERS.length - 1 - i;       // slot from the left: alif sits right-most (RTL)
+    const t0 = 0.03 + i * 0.07;
+    const v = p(lt, t0, t0 + 0.35);
+    if (v <= 0) continue;
+    const flip = Math.cos((1 - eOC(v)) * Math.PI / 2);
+    const cx = W / 2 - total / 2 + j * (cw + gap) + cw / 2;
+    const cy = lerp(540, 330, up) - exit * (1300 + j * 60) + (1 - eOB(v)) * 80;
+    x.save();
+    x.translate(cx, cy); x.scale(flip * lerp(1, 0.86, up), lerp(1, 0.86, up));
+    x.rotate(Math.sin(lt * 3 + i) * 0.02);
+    x.fillStyle = 'rgba(7,37,25,0.18)'; rr(-cw / 2 + 8, -ch / 2 + 12, cw, ch, 22); x.fill();
+    x.fillStyle = EM; rr(-cw / 2, -ch / 2, cw, ch, 22); x.fill();
+    x.strokeStyle = GOLD; x.lineWidth = 3; rr(-cw / 2 + 10, -ch / 2 + 10, cw - 20, ch - 20, 14); x.stroke();
+    x.fillStyle = GOLD2; x.font = F(700, 140, AR); x.textAlign = 'center';
+    x.fillText(LETTERS[i], 0, 28);
+    x.restore();
+  }
+  x.textAlign = 'left';
+  x.save(); x.translate(0, -exit * 900);
+  riseText("Dari Iqra'", W / 2 - 40, 690, 150, EM, 0.95, lt, { align: 'right' });
+  riseText('hingga tajwid.', W / 2 + 10, 690, 150, GOLD, 1.25, lt, { align: 'left' });
+  const sv = eOE(p(lt, 1.35, 1.7));
+  x.globalAlpha = sv; x.fillStyle = EM; x.font = F(600, 40, SANS); x.textAlign = 'center';
+  x.fillText('Belajar mengaji dengan betul, langkah demi langkah', W / 2, 790 + (1 - sv) * 30);
+  x.textAlign = 'left'; x.globalAlpha = 1;
+  x.restore();
+}
+
+// ---------- SCENE 3: online vs physical (4–6.5) ----------
+function avatar(cx, cy, s, skin, cloth, hijab) {
+  x.fillStyle = cloth; x.beginPath(); x.ellipse(cx, cy + 70 * s, 70 * s, 45 * s, 0, Math.PI, 0); x.fill();
+  if (hijab) { x.fillStyle = hijab; x.beginPath(); x.ellipse(cx, cy + 5 * s, 52 * s, 62 * s, 0, 0, Math.PI * 2); x.fill(); }
+  x.fillStyle = skin; circle(cx, cy, 34 * s); x.fill();
+}
+function laptop(lt) {
+  x.fillStyle = INK; rr(-300, -200, 600, 380, 24); x.fill();
+  x.fillStyle = '#1C2B26'; rr(-280, -180, 560, 340, 12); x.fill();
+  // tiles
+  const tv = eOB(p(lt, 0.25, 0.5)), sv = eOB(p(lt, 0.4, 0.65));
+  x.save(); x.translate(-135, -10); x.scale(tv, tv);
+  x.fillStyle = EM2; rr(-125, -150, 250, 300, 14); x.fill();
+  avatar(0, -10, 1.3, '#E9C9A6', GOLD, CREAM);
+  x.fillStyle = WH; x.font = F(600, 20, SANS); x.fillText('Cikgu', -105, 130);
+  x.restore();
+  x.save(); x.translate(135, -10); x.scale(sv, sv);
+  x.fillStyle = '#2E4A41'; rr(-125, -150, 250, 300, 14); x.fill();
+  avatar(0, -10, 1.3, '#C99A74', '#4F8A74', null);
+  x.fillStyle = WH; x.font = F(600, 20, SANS); x.fillText('Anda', -105, 130);
+  x.restore();
+  // speaking ring on tutor
+  const ph = (lt * 2) % 1;
+  x.strokeStyle = GOLD; x.lineWidth = 4; x.globalAlpha = (1 - ph) * tv;
+  rr(-262 - ph * 6, -162 - ph * 6, 254 + ph * 12, 304 + ph * 12, 18); x.stroke(); x.globalAlpha = 1;
+  x.fillStyle = INK; x.beginPath(); x.moveTo(-360, 180); x.lineTo(360, 180); x.lineTo(320, 215); x.lineTo(-320, 215); x.closePath(); x.fill();
+}
+function house(lt) {
+  x.fillStyle = EM;
+  x.beginPath(); x.moveTo(-230, -40); x.lineTo(0, -230); x.lineTo(230, -40); x.closePath(); x.fill();
+  rr(-190, -60, 380, 260, 10); x.fill();
+  x.fillStyle = GOLD; rr(-45, 60, 90, 140, 45); x.fill();
+  x.fillStyle = CREAM;
+  rr(-150, -10, 80, 70, 8); x.fill(); rr(70, -10, 80, 70, 8); x.fill();
+  // light in windows
+  x.fillStyle = GOLD2; x.globalAlpha = 0.6 + 0.4 * Math.sin(lt * 6);
+  rr(-145, -5, 70, 60, 6); x.fill(); x.globalAlpha = 1;
+  // pin
+  const pv = eOB(p(lt, 0.35, 0.6));
+  const bob = Math.sin(lt * 5) * 8;
+  x.save(); x.translate(210, -250 + bob); x.scale(pv, pv);
+  x.fillStyle = GOLD; x.beginPath(); x.arc(0, -60, 50, Math.PI * 0.9, Math.PI * 0.1); x.lineTo(0, 20); x.closePath(); x.fill();
+  x.fillStyle = EM; circle(0, -60, 20); x.fill();
+  x.restore();
+}
+function scene3(t) {
+  const lt = t - 4;
+  x.fillStyle = EM; x.fillRect(0, 0, W, H);
+  const exitV = eIE(p(lt, 2.2, 2.5));
+  // left: online (emerald)
+  const lv = eOE(p(lt, 0, 0.45));
+  x.save(); x.translate(-(1 - lv) * 960, -exitV * H);
+  x.fillStyle = EM; x.fillRect(0, 0, 960, H);
+  pattern(t, GOLD, 0.1, 2, 480, 540, lt * 30);
+  x.save(); x.translate(480, 430); x.scale(0.82, 0.82); laptop(lt); x.restore();
+  riseText('Kelas Online', 480, 780, 92, CREAM, 0.2, lt, { align: 'center' });
+  const ov = eOE(p(lt, 0.5, 0.8));
+  x.globalAlpha = ov; x.fillStyle = GOLD; x.font = F(600, 32, SANS); x.textAlign = 'center'; x.letterSpacing = '2px';
+  x.fillText('Zoom  ·  Google Meet  ·  WhatsApp', 480, 850 + (1 - ov) * 20); x.textAlign = 'left'; x.letterSpacing = '0px'; x.globalAlpha = 1;
+  x.restore();
+  // right: physical (cream)
+  const rv = eOE(p(lt, 0.5, 0.95));
+  x.save(); x.translate((1 - rv) * 960, exitV * H);
+  x.fillStyle = CREAM; x.fillRect(960, 0, 960, H);
+  x.save(); x.beginPath(); x.rect(960, 0, 960, H); x.clip(); pattern(t, GOLD, 0.25, 2, 1440, 540, -lt * 30); x.restore();
+  x.save(); x.translate(1440, 470); x.scale(0.9, 0.9); house(lt - 0.5); x.restore();
+  riseText('Kelas Fizikal', 1440, 780, 92, EM, 0.7, lt, { align: 'center' });
+  const fv = eOE(p(lt, 1.0, 1.3));
+  x.globalAlpha = fv; x.fillStyle = EM; x.font = F(600, 32, SANS); x.textAlign = 'center'; x.letterSpacing = '2px';
+  x.fillText('Cikgu datang ke rumah  ·  Lembah Klang', 1440, 850 + (1 - fv) * 20); x.textAlign = 'left'; x.letterSpacing = '0px'; x.globalAlpha = 1;
+  x.restore();
+  // divider + "atau" badge
+  const bv = eOB(p(lt, 1.0, 1.3)) * (1 - exitV);
+  if (bv > 0) {
+    x.fillStyle = GOLD; x.fillRect(958, H / 2 - 400 * bv, 4, 800 * bv);
+    x.save(); x.translate(960, 540); x.scale(bv, bv); x.rotate((1 - bv) * 1.5);
+    starPath(0, 0, 80, 0); x.fillStyle = GOLD; x.fill();
+    x.fillStyle = INK; x.font = F(800, 30, SANS); x.textAlign = 'center'; x.fillText('ATAU', 0, 11); x.textAlign = 'left';
+    x.restore();
+  }
+}
+
+// ---------- SCENE 4: certified teachers (6.5–8.5) ----------
+function scene4(t) {
+  const lt = t - 6.5;
+  x.fillStyle = EM; x.fillRect(0, 0, W, H);
+  pattern(t, GOLD, 0.1, 2, 520, 540, lt * 25);
+  // medal
+  const mv = spring(p(lt, 0.0, 0.8));
+  x.save(); x.translate(540, 500); x.scale(mv, mv); x.rotate(Math.sin(lt * 2) * 0.04);
+  x.fillStyle = '#B48A2C';
+  x.beginPath(); x.moveTo(-90, 120); x.lineTo(-140, 330); x.lineTo(-80, 300); x.lineTo(-40, 350); x.lineTo(0, 150); x.closePath(); x.fill();
+  x.beginPath(); x.moveTo(90, 120); x.lineTo(140, 330); x.lineTo(80, 300); x.lineTo(40, 350); x.lineTo(0, 150); x.closePath(); x.fill();
+  starPath(0, 0, 250, lt * 0.3); x.fillStyle = GOLD; x.fill();
+  x.fillStyle = GOLD2; circle(0, 0, 170); x.fill();
+  x.strokeStyle = '#B48A2C'; x.lineWidth = 6; circle(0, 0, 145); x.stroke();
+  const cv = eOC(p(lt, 0.35, 0.65));
+  x.strokeStyle = EM; x.lineWidth = 34; x.lineCap = 'round'; x.lineJoin = 'round';
+  const pts = [[-70, 5], [-18, 58], [80, -55]];
+  const l1 = Math.hypot(52, 53), l2 = Math.hypot(98, 113), Lt = l1 + l2, d = cv * Lt;
+  x.beginPath(); x.moveTo(...pts[0]);
+  if (d <= l1) x.lineTo(lerp(-70, -18, d / l1), lerp(5, 58, d / l1));
+  else { x.lineTo(...pts[1]); const f = (d - l1) / l2; x.lineTo(lerp(-18, 80, f), lerp(58, -55, f)); }
+  if (cv > 0) x.stroke();
+  x.lineCap = 'butt';
+  // shine
+  const sh = p(lt, 0.6, 1.1);
+  if (sh > 0 && sh < 1) {
+    x.save(); circle(0, 0, 170); x.clip();
+    x.fillStyle = 'rgba(255,255,255,0.45)'; x.rotate(0.5);
+    x.fillRect(lerp(-300, 300, sh) - 30, -300, 60, 600);
+    x.restore();
+  }
+  x.restore();
+
+  riseText('Cikgu', 1000, 330, 130, CREAM, 0.1, lt);
+  riseText('bertauliah.', 1000, 470, 130, GOLD, 0.3, lt);
+  const items = ['Diploma Pengajian Islam & ke atas', 'Lulus ujian tajwid & tilawah', 'Sabar & jelas mengajar'];
+  items.forEach((s, k) => {
+    const t0 = 0.55 + k * 0.28, v = eOE(p(lt, t0, t0 + 0.4));
+    if (v <= 0) return;
+    const y0 = 600 + k * 95;
+    x.save(); x.globalAlpha = v; x.translate((1 - v) * 80, 0);
+    x.fillStyle = GOLD; circle(1030, y0 - 14, 26); x.fill();
+    const cv2 = eOC(p(lt, t0 + 0.1, t0 + 0.3));
+    x.strokeStyle = EM; x.lineWidth = 7; x.lineCap = 'round'; x.lineJoin = 'round';
+    x.beginPath(); x.moveTo(1018, y0 - 14); x.lineTo(1018 + 8 * Math.min(1, cv2 * 2), y0 - 14 + 8 * Math.min(1, cv2 * 2));
+    if (cv2 > 0.5) x.lineTo(1026 + 16 * (cv2 - 0.5) * 2, y0 - 6 - 18 * (cv2 - 0.5) * 2);
+    x.stroke(); x.lineCap = 'butt';
+    x.fillStyle = CREAM; x.font = F(600, 44, SANS); x.fillText(s, 1080, y0);
+    x.restore();
+  });
+}
+
+// ---------- SCENE 5: RM8 trial (8.5–11) ----------
+function scene5(t) {
+  const lt = t - 8.5;
+  x.fillStyle = GOLD; x.fillRect(0, 0, W, H);
+  // rays
+  x.save(); x.translate(820, 560); x.rotate(lt * 0.2);
+  x.fillStyle = GOLD2; x.globalAlpha = 0.5 * eOE(p(lt, 0.4, 0.9));
+  for (let k = 0; k < 16; k++) { x.rotate(Math.PI / 8); x.beginPath(); x.moveTo(0, 0); x.lineTo(1500, -90); x.lineTo(1500, 90); x.closePath(); x.fill(); }
+  x.restore(); x.globalAlpha = 1;
+  pattern(t, EM, 0.08, 2, 820, 540, lt * 20);
+
+  riseText('KELAS PERCUBAAN', 820, 250, 56, EM, 0.1, lt, { fam: SANS, align: 'center', track: 0.18, stagger: 0.015 });
+  // RM8 slam
+  const sv = eOE(p(lt, 0.5, 0.75));
+  if (sv > 0) {
+    x.save(); x.translate(820, 640);
+    const s = lerp(2.4, 1, sv) * (1 + 0.04 * Math.sin(lt * 4) * p(lt, 1, 2));
+    x.scale(s, s); x.globalAlpha = p(lt, 0.5, 0.58);
+    x.font = F(800, 420, SERIF); x.textAlign = 'center';
+    x.fillStyle = 'rgba(7,37,25,0.25)'; x.fillText('RM8', 12, 18);
+    x.fillStyle = EM; x.fillText('RM8', 0, 0);
+    x.restore();
+    const shv = p(lt, 1.0, 1.4);
+    if (shv > 0 && shv < 1) {
+      x.save(); x.translate(820, 640); x.scale(s, s);
+      x.font = F(800, 420, SERIF); x.textAlign = 'center';
+      x.beginPath(); x.rect(lerp(-600, 500, shv), -400, 90, 500); x.clip();
+      x.fillStyle = '#2E7A5C'; x.fillText('RM8', 0, 0);
+      x.restore();
+    }
+  }
+  // 15 minit pill with timer
+  const pv = eOB(p(lt, 1.0, 1.3));
+  if (pv > 0) {
+    x.save(); x.translate(820, 790); x.scale(pv, pv);
+    x.fillStyle = EM; rr(-230, -50, 460, 100, 50); x.fill();
+    x.strokeStyle = GOLD2; x.lineWidth = 8; circle(-165, 0, 26); x.stroke();
+    x.fillStyle = GOLD2; x.beginPath(); x.moveTo(-165, 0); x.arc(-165, 0, 26, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p(lt, 1.1, 2.4)); x.closePath(); x.fill();
+    x.fillStyle = CREAM; x.font = F(800, 42, SANS); x.fillText('15 minit sahaja', -120, 15);
+    x.restore();
+  }
+  // free notes stamp
+  const st = p(lt, 1.5, 1.75);
+  if (st > 0) {
+    const s = lerp(2.2, 1, eOC(st));
+    x.save(); x.translate(1560, 440); x.rotate(-0.18); x.scale(s, s); x.globalAlpha = clamp(st * 3);
+    x.fillStyle = CREAM; rr(-230, -140, 460, 280, 26); x.fill();
+    x.strokeStyle = EM; x.lineWidth = 6; x.setLineDash([16, 10]); rr(-210, -120, 420, 240, 18); x.stroke(); x.setLineDash([]);
+    x.fillStyle = GOLD; x.font = F(800, 30, SANS); x.textAlign = 'center'; x.letterSpacing = '4px';
+    x.fillText('BONUS', 0, -60); x.letterSpacing = '0px';
+    x.fillStyle = EM; x.font = F(800, 40, SERIF); x.fillText('Nota Asas Tajwid', 0, 0);
+    x.fillStyle = '#B23A2E'; x.font = F(800, 54, SANS); x.fillText('PERCUMA', 0, 75);
+    x.textAlign = 'left';
+    x.restore();
+  }
+  // exit: emerald wipe from bottom
+  const ev = eIOC(p(lt, 2.25, 2.5));
+  if (ev > 0) { x.fillStyle = EM; x.fillRect(0, H - ev * H, W, ev * H); }
+}
+
+// ---------- SCENE 6: mission counter (11–12.5) ----------
+const SPARKS = Array.from({ length: 60 }, (_, k) => ({ x: (k * 337) % W, s: 0.4 + ((k * 13) % 10) / 10, o: (k * 0.137) % 1 }));
+function fmt(n) { return n.toLocaleString('en-US'); }
+function scene6(t) {
+  const lt = t - 11;
+  x.fillStyle = EM; x.fillRect(0, 0, W, H);
+  pattern(t, GOLD, 0.1, 2, W / 2, H / 2, lt * 40);
+  for (const s of SPARKS) {
+    const y = H + 40 - ((lt * 380 * s.s + s.o * H) % (H + 80));
+    x.globalAlpha = 0.6 * s.s; x.fillStyle = GOLD2;
+    starPath(s.x, y, 8 * s.s, lt); x.fill();
+  }
+  x.globalAlpha = 1;
+  riseText('MISI KAMI', W / 2, 300, 46, GOLD, 0.0, lt, { fam: SANS, align: 'center', track: 0.3, stagger: 0.02 });
+  const lq = Math.floor(t * 30 + 1e-6) / 30 - 11; // hold digits steady within a frame
+  const n = Math.round(eOC(p(lq, 0.1, 1.0)) * 1000000);
+  const pop = 1 + 0.08 * Math.exp(-Math.max(0, lt - 1.0) * 10) * (lt > 1.0 ? 1 : 0);
+  x.save(); x.translate(W / 2, 570); x.scale(pop, pop);
+  x.fillStyle = CREAM; x.font = F(800, 230, SERIF); x.textAlign = 'center';
+  x.globalAlpha = p(lt, 0.05, 0.15);
+  x.fillText(fmt(n), 0, 0);
+  x.restore(); x.textAlign = 'left'; x.globalAlpha = 1;
+  riseText('rakyat Malaysia membaca Al-Quran', W / 2, 720, 64, CREAM, 0.35, lt, { fam: SANS, weight: 600, align: 'center', stagger: 0.012 });
+  riseText('dengan tajwid yang betul.', W / 2, 810, 64, GOLD, 0.55, lt, { fam: SANS, weight: 600, align: 'center', stagger: 0.012 });
+  // zoom-through into a star for the transition
+  const zv = eIE(p(lt, 1.2, 1.5));
+  if (zv > 0) { starPath(W / 2, H / 2, zv * 1900, zv * 1.2); x.fillStyle = INK; x.fill(); }
+}
+
+// ---------- SCENE 7: logo (12.5–15) ----------
+const DUST = Array.from({ length: 50 }, (_, k) => ({ a: k * 2.399, sp: 300 + ((k * 71) % 13) * 60, s: 4 + (k * 7) % 9 }));
+function book(lt) {
+  const v = eOE(p(lt, 0.0, 0.5));
+  x.save(); x.scale(1, v);
+  x.fillStyle = GOLD;
+  // pages
+  x.beginPath(); x.moveTo(0, 30); x.quadraticCurveTo(-60, 0, -130, 10); x.lineTo(-130, -110); x.quadraticCurveTo(-60, -125, 0, -95); x.closePath(); x.fill();
+  x.beginPath(); x.moveTo(0, 30); x.quadraticCurveTo(60, 0, 130, 10); x.lineTo(130, -110); x.quadraticCurveTo(60, -125, 0, -95); x.closePath(); x.fill();
+  x.strokeStyle = INK; x.lineWidth = 4;
+  for (let k = 0; k < 4; k++) {
+    const yy = -80 + k * 22;
+    x.beginPath(); x.moveTo(-110, yy + 4); x.quadraticCurveTo(-60, yy - 8, -18, yy + 6); x.stroke();
+    x.beginPath(); x.moveTo(18, yy + 6); x.quadraticCurveTo(60, yy - 8, 110, yy + 4); x.stroke();
+  }
+  // rehal stand
+  x.strokeStyle = GOLD; x.lineWidth = 14; x.lineCap = 'round';
+  x.beginPath(); x.moveTo(-110, 40); x.lineTo(70, 120); x.moveTo(110, 40); x.lineTo(-70, 120); x.stroke();
+  x.lineCap = 'butt';
+  x.restore();
+}
+function scene7(t) {
+  const lt = t - 12.5;
+  const g = x.createRadialGradient(W / 2, 420, 50, W / 2, 480, 1200);
+  g.addColorStop(0, EM2); g.addColorStop(1, INK);
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  const gz = lerp(1, 1.04, p(lt, 0, 2.5));
+  x.save(); x.translate(W / 2, H / 2); x.scale(gz, gz); x.translate(-W / 2, -H / 2);
+  pattern(t, GOLD, 0.14, lerp(0, 1.8, eOC(p(lt, 0, 1.2))), W / 2, 330);
+
+  // light rays
+  x.save(); x.translate(W / 2, 330); x.rotate(lt * 0.15);
+  x.fillStyle = GOLD; x.globalAlpha = 0.08 * eOE(p(lt, 0, 0.5));
+  for (let k = 0; k < 12; k++) { x.rotate(Math.PI / 6); x.beginPath(); x.moveTo(0, 0); x.lineTo(1400, -120); x.lineTo(1400, 120); x.closePath(); x.fill(); }
+  x.restore(); x.globalAlpha = 1;
+
+  // emblem: star frame + book
+  const ev = spring(p(lt, 0.0, 0.9));
+  x.save(); x.translate(W / 2, 330); x.scale(ev, ev); x.rotate((1 - ev) * -0.8);
+  starPath(0, 0, 190, 0); x.fillStyle = EM; x.fill();
+  x.strokeStyle = GOLD; x.lineWidth = 7; x.stroke();
+  x.lineWidth = 2.5; starPath(0, 0, 165, Math.PI / 8); x.stroke();
+  x.translate(0, 20); book(lt - 0.15);
+  x.restore();
+
+  // dust burst
+  for (const d of DUST) {
+    const v = eOC(p(lt, 0, 1.4)), r = d.sp * v, al = 1 - p(lt, 0.6, 1.6);
+    if (al <= 0) continue;
+    x.globalAlpha = al; x.fillStyle = GOLD2;
+    circle(W / 2 + Math.cos(d.a) * r, 330 + Math.sin(d.a) * r * 0.8, d.s / 2); x.fill();
+  }
+  x.globalAlpha = 1;
+
+  // wordmark: gold K + cream Quran, letters spring in
+  x.font = F(800, 190, SERIF);
+  const word = 'KQuran';
+  const tw = x.measureText(word).width;
+  let cx = W / 2 - tw / 2;
+  for (let k = 0; k < word.length; k++) {
+    const ch = word[k], cw = x.measureText(ch).width;
+    const v = spring(p(lt, 0.25 + k * 0.05, 0.25 + k * 0.05 + 0.9));
+    x.save(); x.translate(cx + cw / 2, 720 + (1 - v) * 90); x.scale(v, v);
+    x.fillStyle = k === 0 ? GOLD : CREAM; x.fillText(ch, -cw / 2, 0);
+    x.restore();
+    cx += cw;
+  }
+  riseText('HOME LEARNING', W / 2, 800, 40, GOLD, 0.7, lt, { fam: SANS, align: 'center', track: 0.45, stagger: 0.02 });
+
+  const bv = eOB(p(lt, 1.15, 1.45));
+  if (bv > 0) {
+    x.save(); x.translate(W / 2, 915); x.scale(bv, bv);
+    x.fillStyle = GOLD; rr(-330, -48, 660, 96, 48); x.fill();
+    x.fillStyle = INK; x.font = F(800, 38, SANS); x.textAlign = 'center';
+    x.fillText('Daftar sekarang  ·  kquran.my', 0, 13); x.textAlign = 'left';
+    // shine
+    const sh = p(lt, 1.6, 2.1);
+    if (sh > 0 && sh < 1) {
+      x.beginPath(); x.roundRect(-330, -48, 660, 96, 48); x.clip();
+      x.fillStyle = 'rgba(255,255,255,0.5)'; x.transform(1, 0, -0.4, 1, 0, 0);
+      x.fillRect(lerp(-450, 450, sh), -60, 50, 120);
+    }
+    x.restore();
+  }
+  x.restore();
+
+  const fl = 1 - p(lt, 0, 0.25);
+  if (fl > 0) { x.fillStyle = GOLD2; x.globalAlpha = fl * 0.8; x.fillRect(0, 0, W, H); x.globalAlpha = 1; }
+}
+
+// ---------- compose ----------
+function drawAt(t) {
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.fillStyle = INK; x.fillRect(0, 0, W, H);
+  const [sx, sy] = shake(t);
+  x.save(); x.translate(sx, sy);
+  x.translate(W / 2, H / 2); x.scale(1.02, 1.02); x.translate(-W / 2, -H / 2);
+  if (t < 2) scene1(t);
+  else if (t < 4) scene2(t);
+  else if (t < 6.5) scene3(t);
+  else if (t < 8.5) scene4(t);
+  else if (t < 8.8) {
+    scene4(t);
+    x.save(); x.beginPath(); x.moveTo(0, 0);
+    const v = eIOC(p(t, 8.5, 8.8));
+    x.rect(0, 0, W * v * 1.3 - 200, H); x.clip(); scene5(t); x.restore();
+  }
+  else if (t < 11) scene5(t);
+  else if (t < 12.5) scene6(t);
+  else scene7(t);
+  x.restore();
+  const g = x.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 1.05);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.25)');
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+}
+
+window.frame = function (t, samples = 5, fps = 30) {
+  const shutter = 0.5 / fps;
+  for (let k = 0; k < samples; k++) {
+    drawAt(Math.min(DUR - 1e-4, t + (k / samples) * shutter));
+    octx.globalAlpha = 1 / (k + 1);
+    octx.drawImage(buf, 0, 0);
+  }
+  octx.globalAlpha = 1;
+};
+
+window.fontsReady = Promise.all([
+  document.fonts.load('700 100px "Amiri"', 'ابت'),
+  document.fonts.load('800 100px "Playfair"'),
+  document.fonts.load('600 100px "Jakarta"'),
+  document.fonts.load('800 100px "Jakarta"'),
+]);
+
+if (!window.__RENDER__) {
+  window.fontsReady.then(() => {
+    const t0 = performance.now();
+    (function loop() { window.frame(((performance.now() - t0) / 1000) % DUR, 1); requestAnimationFrame(loop); })();
+  });
+}
+</script>
+</body>
+</html>

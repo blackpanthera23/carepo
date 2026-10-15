@@ -5,25 +5,35 @@
 **Type:** Playfair Display (headlines) · Plus Jakarta Sans (UI) · Amiri (Arabic letters)
 **Motif:** 8-point Islamic star `{8/2}` used as tile pattern, transitions and the logo frame
 
-## Research notes (kquran.my, via search; site blocked from the render box)
-KQuran Home Learning is a Malaysian Quran tutoring service: learn to read the Quran fluently
-from Iqra' through tajwid. Classes run online (Zoom, Google Meet, WhatsApp video) or in person,
-with a tutor coming to your home in the Klang Valley. Teachers hold a diploma in Islamic studies
-or higher and pass tajwid and recitation tests. A 15-minute trial class costs RM8, and every
-registration comes with free basic tajwid notes. Its mission is 1,000,000 Malaysians reading
-with tajwid.
+## Facts used — status
+kquran.my is blocked by this environment's network policy, so nothing below was read directly
+from the site. The rule for this video: only claims that appeared as direct quotes from kquran.my
+in search results, or that the client confirmed.
+
+| Claim in video | Source | Status |
+|---|---|---|
+| Kelas online, terus dari rumah | client (no physical classes) | ✅ confirmed by client |
+| Iqra' → tajwid | quoted "Pakej A: Kelas Mengaji Iqra'" + tajwid notes | ⚠️ quote via search, not read directly |
+| Cikgu: Diploma Pengajian Islam & ke atas; lulus ujian tajwid & tilawah | quoted from kquran.my | ⚠️ quote via search, not read directly |
+| Kelas percubaan RM8 · 15 minit | quoted from kquran.my | ⚠️ quote via search, not read directly |
+| Nota Asas Tajwid PERCUMA | quoted "Nota Ringkasan Asas Tajwid … PERCUMA" | ⚠️ quote via search, not read directly |
+| kquran.my | domain found in search | ⚠️ |
+
+**Removed because they were wrong or unverified:** physical classes / Lembah Klang (wrong: there are
+no physical classes), Zoom/Meet/WhatsApp, "1,000,000" mission, and "Sabar & jelas mengajar"
+(came from third-party reviews).
 
 ## Script (on-screen copy in Malay)
 
-| Time | Visual | Copy | Sound |
-|---|---|---|---|
-| 0.0–2.0 | A gold 8-point star draws itself; the star pattern ripples out across the emerald | **Nak baca Al-Quran / dengan lancar?** | bell, shimmer sweep, soft daf hits |
-| 2.0–4.0 | Iris to cream; Iqra cards flip in right-to-left: ا ب ت ث ج ح خ د | **Dari Iqra' hingga tajwid.** | 8 card flicks, whooshes |
-| 4.0–6.5 | Split screen: laptop video call vs. a house with a bouncing pin, "ATAU" star badge | **Kelas Online** / **Kelas Fizikal** | whooshes, pops, ding |
-| 6.5–8.5 | A gold medal springs in, a check draws itself; checklist ticks on | **Cikgu bertauliah.** | boom, shimmer, check pops |
-| 8.5–11.0 | Gold wipe; "RM8" slams down with a shine sweep; a 15-minute timer fills; bonus stamp | **Kelas percubaan RM8 · 15 minit sahaja · Nota Asas Tajwid PERCUMA** | big slam, coin "ching", stamp thud |
-| 11.0–12.5 | Counter rolls 0 → 1,000,000 while gold stars rise | **Misi kami: rakyat Malaysia membaca Al-Quran dengan tajwid yang betul.** | tick roll, pop, riser |
-| 12.5–15.0 | Zoom through a star → emblem (open mushaf on a rehal inside a star) + wordmark | **KQuran · HOME LEARNING · Daftar sekarang · kquran.my** | boom, shimmer, final "aa" chord |
+| Time | Visual | Copy |
+|---|---|---|
+| 0.0–2.0 | A gold 8-point star draws itself; the pattern ripples out | **Nak baca Al-Quran / dengan lancar?** |
+| 2.0–4.0 | Iqra cards flip in right-to-left: ا ب ت ث ج ح خ د | **Dari Iqra' hingga tajwid.** |
+| 4.0–6.5 | Laptop slides in, tutor/student video tiles pop | **Kelas online, / terus dari rumah.** |
+| 6.5–8.5 | A gold medal springs in, a check draws itself, 2 checklist items | **Cikgu bertauliah.** |
+| 8.5–11.0 | Gold wipe; "RM8" slams down; a 15-minute timer fills; bonus stamp | **Kelas percubaan RM8 · 15 minit sahaja · Nota Asas Tajwid PERCUMA** |
+| 11.0–12.5 | Gold stars rise | **Mula mengaji / hari ini.** |
+| 12.5–15.0 | Zoom through a star → emblem + wordmark | **KQuran · HOME LEARNING · Daftar sekarang · kquran.my** |
 
 ## Sound
 Nasheed-style on purpose, with no melodic instruments, since this is Quran-learning content:

@@ -288,21 +288,21 @@ for i in range(8):
 add(sfx, 2.95, whoosh(0.3, 600, 4000), 0.25, pan=-0.3)
 add(sfx, 3.25, whoosh(0.3, 600, 4000), 0.25, pan=0.3)
 add(sfx, 3.68, whoosh(0.35, 300, 5000), 0.45)
-# 4–6.5 formats
+# 4–6.5 online class
 add(sfx, 3.9, whoosh(0.4, 200, 3000), 0.5, pan=-0.6)
 add(sfx, 4.0, boom(), 0.45)
 add(sfx, 4.25, pop(700, 1500), 0.3, pan=-0.4)
 add(sfx, 4.4, pop(800, 1700), 0.3, pan=-0.3)
-add(sfx, 4.45, whoosh(0.4, 200, 3000), 0.5, pan=0.6)
-add(sfx, 4.85, pop(500, 1300, 0.12), 0.4, pan=0.5)
-add(sfx, 5.0, bell(1760, 1.0), 0.25, verb=0.4)
-add(sfx, 5.0, pop(400, 1000, 0.1), 0.4)
+add(sfx, 4.3, whoosh(0.3, 600, 4000), 0.25, pan=0.4)
+add(sfx, 4.6, whoosh(0.3, 600, 4000), 0.25, pan=0.4)
+add(sfx, 4.5, bell(1175, 0.9), 0.22, verb=0.4)   # call connects
+add(sfx, 4.62, bell(1568, 1.0), 0.22, verb=0.4)
 add(sfx, 6.2, whoosh(0.35, 3000, 300), 0.45)
 # 6.5–8.5 teachers
 add(sfx, 6.5, boom(), 0.5)
 add(sfx, 6.5, shimmer(1.0, 1800), 0.25, verb=0.5)
 add(sfx, 6.85, bell(1568, 1.2), 0.3, verb=0.4)
-for k in range(3):
+for k in range(2):
     add(sfx, 7.05 + k * 0.28, pop(900, 2000, 0.06), 0.35, pan=0.3)
     add(sfx, 7.15 + k * 0.28, tick(3000), 0.3, pan=0.3)
 # 8.5–11 RM8
@@ -315,13 +315,11 @@ add(sfx, 9.5, pop(500, 1300, 0.1), 0.4)
 add(sfx, 9.5, whoosh(0.4, 2000, 8000), 0.15)  # shine
 add(sfx, 10.0, stamp(), 0.7)
 add(sfx, 10.72, whoosh(0.35, 300, 4000), 0.45)
-# 11–12.5 mission counter
+# 11–12.5 call to start
 add(sfx, 10.95, boom(), 0.3)
-for k in range(30):
-    t0 = 11.1 + 0.9 * (1 - (1 - k / 30) ** 1.6)
-    add(sfx, t0, tick(2200 + k * 40), 0.2, pan=0.2)
-add(sfx, 12.0, pop(600, 1600, 0.1), 0.45)
-add(sfx, 12.0, boom(), 0.5)
+add(sfx, 11.05, whoosh(0.35, 400, 3500), 0.3, pan=-0.3)
+add(sfx, 11.4, whoosh(0.35, 400, 3500), 0.3, pan=0.3)
+add(sfx, 11.4, bell(1760, 1.0), 0.18, verb=0.5)
 add(sfx, 12.0, riser(0.5), 0.6)
 # 12.5–15 logo
 add(sfx, 12.5, boom(True), 1.0, verb=0.35)

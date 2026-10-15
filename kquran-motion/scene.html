@@ -90,7 +90,7 @@ function pattern(t, color, alpha, reveal = 1, cx = W / 2, cy = H / 2, drift = 0)
 }
 
 // ---------- camera shake ----------
-const IMPACTS = [[2.0, 8], [4.0, 10], [6.5, 8], [9.0, 22], [10.0, 8], [12.0, 10], [12.5, 18]];
+const IMPACTS = [[2.0, 8], [4.0, 10], [6.5, 8], [9.0, 22], [10.0, 8], [12.5, 18]];
 function shake(t) {
   let a = 0;
   for (const [ti, amp] of IMPACTS) if (t >= ti) a += amp * Math.exp(-(t - ti) * 11);
@@ -193,59 +193,19 @@ function laptop(lt) {
   rr(-262 - ph * 6, -162 - ph * 6, 254 + ph * 12, 304 + ph * 12, 18); x.stroke(); x.globalAlpha = 1;
   x.fillStyle = INK; x.beginPath(); x.moveTo(-360, 180); x.lineTo(360, 180); x.lineTo(320, 215); x.lineTo(-320, 215); x.closePath(); x.fill();
 }
-function house(lt) {
-  x.fillStyle = EM;
-  x.beginPath(); x.moveTo(-230, -40); x.lineTo(0, -230); x.lineTo(230, -40); x.closePath(); x.fill();
-  rr(-190, -60, 380, 260, 10); x.fill();
-  x.fillStyle = GOLD; rr(-45, 60, 90, 140, 45); x.fill();
-  x.fillStyle = CREAM;
-  rr(-150, -10, 80, 70, 8); x.fill(); rr(70, -10, 80, 70, 8); x.fill();
-  // light in windows
-  x.fillStyle = GOLD2; x.globalAlpha = 0.6 + 0.4 * Math.sin(lt * 6);
-  rr(-145, -5, 70, 60, 6); x.fill(); x.globalAlpha = 1;
-  // pin
-  const pv = eOB(p(lt, 0.35, 0.6));
-  const bob = Math.sin(lt * 5) * 8;
-  x.save(); x.translate(210, -250 + bob); x.scale(pv, pv);
-  x.fillStyle = GOLD; x.beginPath(); x.arc(0, -60, 50, Math.PI * 0.9, Math.PI * 0.1); x.lineTo(0, 20); x.closePath(); x.fill();
-  x.fillStyle = EM; circle(0, -60, 20); x.fill();
-  x.restore();
-}
 function scene3(t) {
   const lt = t - 4;
   x.fillStyle = EM; x.fillRect(0, 0, W, H);
   const exitV = eIE(p(lt, 2.2, 2.5));
-  // left: online (emerald)
-  const lv = eOE(p(lt, 0, 0.45));
-  x.save(); x.translate(-(1 - lv) * 960, -exitV * H);
-  x.fillStyle = EM; x.fillRect(0, 0, 960, H);
-  pattern(t, GOLD, 0.1, 2, 480, 540, lt * 30);
-  x.save(); x.translate(480, 430); x.scale(0.82, 0.82); laptop(lt); x.restore();
-  riseText('Kelas Online', 480, 780, 92, CREAM, 0.2, lt, { align: 'center' });
-  const ov = eOE(p(lt, 0.5, 0.8));
-  x.globalAlpha = ov; x.fillStyle = GOLD; x.font = F(600, 32, SANS); x.textAlign = 'center'; x.letterSpacing = '2px';
-  x.fillText('Zoom  ·  Google Meet  ·  WhatsApp', 480, 850 + (1 - ov) * 20); x.textAlign = 'left'; x.letterSpacing = '0px'; x.globalAlpha = 1;
+  x.save(); x.translate(0, -exitV * H);
+  pattern(t, GOLD, 0.1, 2, 620, 540, lt * 30);
+  const lv = eOE(p(lt, 0, 0.5));
+  x.save(); x.translate(lerp(-500, 560, lv), 520); x.rotate((1 - lv) * -0.2); x.scale(1.15, 1.15); laptop(lt); x.restore();
+  riseText('Kelas online,', 1060, 480, 104, CREAM, 0.3, lt);
+  riseText('terus dari rumah.', 1060, 610, 104, GOLD, 0.6, lt);
+  const uv = eOE(p(lt, 0.9, 1.3));
+  x.fillStyle = GOLD; x.fillRect(1064, 665, 520 * uv, 8);
   x.restore();
-  // right: physical (cream)
-  const rv = eOE(p(lt, 0.5, 0.95));
-  x.save(); x.translate((1 - rv) * 960, exitV * H);
-  x.fillStyle = CREAM; x.fillRect(960, 0, 960, H);
-  x.save(); x.beginPath(); x.rect(960, 0, 960, H); x.clip(); pattern(t, GOLD, 0.25, 2, 1440, 540, -lt * 30); x.restore();
-  x.save(); x.translate(1440, 470); x.scale(0.9, 0.9); house(lt - 0.5); x.restore();
-  riseText('Kelas Fizikal', 1440, 780, 92, EM, 0.7, lt, { align: 'center' });
-  const fv = eOE(p(lt, 1.0, 1.3));
-  x.globalAlpha = fv; x.fillStyle = EM; x.font = F(600, 32, SANS); x.textAlign = 'center'; x.letterSpacing = '2px';
-  x.fillText('Cikgu datang ke rumah  ·  Lembah Klang', 1440, 850 + (1 - fv) * 20); x.textAlign = 'left'; x.letterSpacing = '0px'; x.globalAlpha = 1;
-  x.restore();
-  // divider + "atau" badge
-  const bv = eOB(p(lt, 1.0, 1.3)) * (1 - exitV);
-  if (bv > 0) {
-    x.fillStyle = GOLD; x.fillRect(958, H / 2 - 400 * bv, 4, 800 * bv);
-    x.save(); x.translate(960, 540); x.scale(bv, bv); x.rotate((1 - bv) * 1.5);
-    starPath(0, 0, 80, 0); x.fillStyle = GOLD; x.fill();
-    x.fillStyle = INK; x.font = F(800, 30, SANS); x.textAlign = 'center'; x.fillText('ATAU', 0, 11); x.textAlign = 'left';
-    x.restore();
-  }
 }
 
 // ---------- SCENE 4: certified teachers (6.5–8.5) ----------
@@ -283,7 +243,7 @@ function scene4(t) {
 
   riseText('Cikgu', 1000, 330, 130, CREAM, 0.1, lt);
   riseText('bertauliah.', 1000, 470, 130, GOLD, 0.3, lt);
-  const items = ['Diploma Pengajian Islam & ke atas', 'Lulus ujian tajwid & tilawah', 'Sabar & jelas mengajar'];
+  const items = ['Diploma Pengajian Islam & ke atas', 'Lulus ujian tajwid & tilawah'];
   items.forEach((s, k) => {
     const t0 = 0.55 + k * 0.28, v = eOE(p(lt, t0, t0 + 0.4));
     if (v <= 0) return;
@@ -362,7 +322,6 @@ function scene5(t) {
 
 // ---------- SCENE 6: mission counter (11–12.5) ----------
 const SPARKS = Array.from({ length: 60 }, (_, k) => ({ x: (k * 337) % W, s: 0.4 + ((k * 13) % 10) / 10, o: (k * 0.137) % 1 }));
-function fmt(n) { return n.toLocaleString('en-US'); }
 function scene6(t) {
   const lt = t - 11;
   x.fillStyle = EM; x.fillRect(0, 0, W, H);
@@ -373,18 +332,8 @@ function scene6(t) {
     starPath(s.x, y, 8 * s.s, lt); x.fill();
   }
   x.globalAlpha = 1;
-  riseText('MISI KAMI', W / 2, 300, 46, GOLD, 0.0, lt, { fam: SANS, align: 'center', track: 0.3, stagger: 0.02 });
-  const lq = Math.floor(t * 30 + 1e-6) / 30 - 11; // hold digits steady within a frame
-  const n = Math.round(eOC(p(lq, 0.1, 1.0)) * 1000000);
-  const pop = 1 + 0.08 * Math.exp(-Math.max(0, lt - 1.0) * 10) * (lt > 1.0 ? 1 : 0);
-  x.save(); x.translate(W / 2, 570); x.scale(pop, pop);
-  x.fillStyle = CREAM; x.font = F(800, 230, SERIF); x.textAlign = 'center';
-  x.globalAlpha = p(lt, 0.05, 0.15);
-  x.fillText(fmt(n), 0, 0);
-  x.restore(); x.textAlign = 'left'; x.globalAlpha = 1;
-  riseText('rakyat Malaysia membaca Al-Quran', W / 2, 720, 64, CREAM, 0.35, lt, { fam: SANS, weight: 600, align: 'center', stagger: 0.012 });
-  riseText('dengan tajwid yang betul.', W / 2, 810, 64, GOLD, 0.55, lt, { fam: SANS, weight: 600, align: 'center', stagger: 0.012 });
-  // zoom-through into a star for the transition
+  riseText('Mula mengaji', W / 2, 500, 170, CREAM, 0.05, lt, { align: 'center' });
+  riseText('hari ini.', W / 2, 700, 170, GOLD, 0.4, lt, { align: 'center' });
   const zv = eIE(p(lt, 1.2, 1.5));
   if (zv > 0) { starPath(W / 2, H / 2, zv * 1900, zv * 1.2); x.fillStyle = INK; x.fill(); }
 }
